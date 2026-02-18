@@ -20,7 +20,7 @@ public class MaintenanceNotificationValidator : AbstractValidator<MaintenanceNot
             .MaximumLength(2000).WithMessage("Description must not exceed 2000 characters");
 
         RuleFor(x => x.ScheduledDate)
-            .GreaterThan(DateTime.UtcNow).WithMessage("Scheduled date must be in the future")
+            .Must(date => date > DateTime.UtcNow).WithMessage("Scheduled date must be in the future")
             .When(x => x.Status == MaintenanceStatus.Pending);
 
         RuleFor(x => x.Status)
