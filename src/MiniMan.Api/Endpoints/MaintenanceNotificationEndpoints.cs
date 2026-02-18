@@ -66,13 +66,7 @@ public static class MaintenanceNotificationEndpoints
         var validationResult = await validator.ValidateAsync(notification);
         if (!validationResult.IsValid)
         {
-            var errors = validationResult.Errors
-                .GroupBy(e => e.PropertyName)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(e => e.ErrorMessage).ToArray()
-                );
-            return TypedResults.ValidationProblem(errors);
+            return TypedResults.ValidationProblem(ValidationHelper.ToErrorDictionary(validationResult));
         }
 
         notification.Id = Guid.NewGuid();
@@ -99,13 +93,7 @@ public static class MaintenanceNotificationEndpoints
         var validationResult = await validator.ValidateAsync(notification);
         if (!validationResult.IsValid)
         {
-            var errors = validationResult.Errors
-                .GroupBy(e => e.PropertyName)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(e => e.ErrorMessage).ToArray()
-                );
-            return TypedResults.ValidationProblem(errors);
+            return TypedResults.ValidationProblem(ValidationHelper.ToErrorDictionary(validationResult));
         }
 
         existing.Title = notification.Title;
