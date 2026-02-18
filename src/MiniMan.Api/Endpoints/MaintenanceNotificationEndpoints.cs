@@ -58,7 +58,7 @@ public static class MaintenanceNotificationEndpoints
         return TypedResults.Ok(notification);
     }
 
-    private static async Task<Results<Created<MaintenanceNotification>, BadRequest<string>>> Create(
+    private static async Task<Results<Created<MaintenanceNotification>, ValidationProblem>> Create(
         MaintenanceNotification notification,
         IValidator<MaintenanceNotification> validator,
         MiniManDbContext dbContext)
@@ -66,7 +66,7 @@ public static class MaintenanceNotificationEndpoints
         var validationResult = await validator.ValidateAsync(notification);
         if (!validationResult.IsValid)
         {
-            return TypedResults.BadRequest(string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage)));
+            return TypedResults.ValidationProblem(ValidationHelper.ToErrorDictionary(validationResult));
         }
 
         notification.Id = Guid.NewGuid();
@@ -78,7 +78,7 @@ public static class MaintenanceNotificationEndpoints
         return TypedResults.Created($"/api/maintenance-notifications/{notification.Id}", notification);
     }
 
-    private static async Task<Results<Ok<MaintenanceNotification>, BadRequest<string>, NotFound>> Update(
+    private static async Task<Results<Ok<MaintenanceNotification>, ValidationProblem, NotFound>> Update(
         Guid id,
         MaintenanceNotification notification,
         IValidator<MaintenanceNotification> validator,
@@ -93,7 +93,7 @@ public static class MaintenanceNotificationEndpoints
         var validationResult = await validator.ValidateAsync(notification);
         if (!validationResult.IsValid)
         {
-            return TypedResults.BadRequest(string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage)));
+            return TypedResults.ValidationProblem(ValidationHelper.ToErrorDictionary(validationResult));
         }
 
         existing.Title = notification.Title;
