@@ -1,6 +1,8 @@
 using FluentValidation;
 using MiniMan.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
+using MiniMan.Api.Data;
 
 namespace MiniMan.Api.Endpoints;
 
@@ -9,8 +11,6 @@ namespace MiniMan.Api.Endpoints;
 /// </summary>
 public static class WorkOrderEndpoints
 {
-    private static readonly Dictionary<Guid, WorkOrder> _workOrders = new();
-
     public static void MapWorkOrderEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/work-orders")
@@ -42,23 +42,26 @@ public static class WorkOrderEndpoints
             .Produces(StatusCodes.Status404NotFound);
     }
 
-    private static Ok<IEnumerable<WorkOrder>> GetAll()
+    private static async Task<Ok<IEnumerable<WorkOrder>>> GetAll(MiniManDbContext dbContext)
     {
-        return TypedResults.Ok(_workOrders.Values.AsEnumerable());
+        var workOrders = await dbContext.WorkOrders.ToListAsync();
+        return TypedResults.Ok(workOrders.AsEnumerable());
     }
 
-    private static Results<Ok<WorkOrder>, NotFound> GetById(Guid id)
+    private static async Task<Results<Ok<WorkOrder>, NotFound>> GetById(Guid id, MiniManDbContext dbContext)
     {
-        if (_workOrders.TryGetValue(id, out var workOrder))
+        var workOrder = await dbContext.WorkOrders.FindAsync(id);
+        if (workOrder == null)
         {
-            return TypedResults.Ok(workOrder);
+            return TypedResults.NotFound();
         }
-        return TypedResults.NotFound();
+        return TypedResults.Ok(workOrder);
     }
 
     private static async Task<Results<Created<WorkOrder>, BadRequest<string>>> Create(
         WorkOrder workOrder,
-        IValidator<WorkOrder> validator)
+        IValidator<WorkOrder> validator,
+        MiniManDbContext dbContext)
     {
         var validationResult = await validator.ValidateAsync(workOrder);
         if (!validationResult.IsValid)
@@ -68,7 +71,9 @@ public static class WorkOrderEndpoints
 
         workOrder.Id = Guid.NewGuid();
         workOrder.CreatedDate = DateTime.UtcNow;
-        _workOrders[workOrder.Id] = workOrder;
+        
+        dbContext.WorkOrders.Add(workOrder);
+        await dbContext.SaveChangesAsync();
 
         return TypedResults.Created($"/api/work-orders/{workOrder.Id}", workOrder);
     }
@@ -76,9 +81,11 @@ public static class WorkOrderEndpoints
     private static async Task<Results<Ok<WorkOrder>, BadRequest<string>, NotFound>> Update(
         Guid id,
         WorkOrder workOrder,
-        IValidator<WorkOrder> validator)
+        IValidator<WorkOrder> validator,
+        MiniManDbContext dbContext)
     {
-        if (!_workOrders.ContainsKey(id))
+        var existing = await dbContext.WorkOrders.FindAsync(id);
+        if (existing == null)
         {
             return TypedResults.NotFound();
         }
@@ -89,18 +96,29 @@ public static class WorkOrderEndpoints
             return TypedResults.BadRequest(string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage)));
         }
 
-        workOrder.Id = id;
-        _workOrders[id] = workOrder;
+        existing.OrderNumber = workOrder.OrderNumber;
+        existing.Description = workOrder.Description;
+        existing.DueDate = workOrder.DueDate;
+        existing.AssignedTo = workOrder.AssignedTo;
+        existing.Status = workOrder.Status;
+        existing.Category = workOrder.Category;
 
-        return TypedResults.Ok(workOrder);
+        await dbContext.SaveChangesAsync();
+
+        return TypedResults.Ok(existing);
     }
 
-    private static Results<NoContent, NotFound> Delete(Guid id)
+    private static async Task<Results<NoContent, NotFound>> Delete(Guid id, MiniManDbContext dbContext)
     {
-        if (!_workOrders.Remove(id))
+        var workOrder = await dbContext.WorkOrders.FindAsync(id);
+        if (workOrder == null)
         {
             return TypedResults.NotFound();
         }
+
+        dbContext.WorkOrders.Remove(workOrder);
+        await dbContext.SaveChangesAsync();
+
         return TypedResults.NoContent();
     }
 }

@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
-using Microsoft.AspNetCore.Mvc.Testing;
 using MiniMan.Models;
 using MiniMan.Models.Enums;
 
@@ -10,12 +9,15 @@ namespace MiniMan.Api.Tests;
 /// <summary>
 /// Integration tests for WorkOrder endpoints
 /// </summary>
-public class WorkOrderEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Sequential")]
+public class WorkOrderEndpointsTests : IClassFixture<CustomWebApplicationFactory>
 {
     private readonly HttpClient _client;
+    private readonly CustomWebApplicationFactory _factory;
 
-    public WorkOrderEndpointsTests(WebApplicationFactory<Program> factory)
+    public WorkOrderEndpointsTests(CustomWebApplicationFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
     }
 

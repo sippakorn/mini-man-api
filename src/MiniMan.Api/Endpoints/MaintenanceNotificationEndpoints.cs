@@ -1,6 +1,8 @@
 using FluentValidation;
 using MiniMan.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
+using MiniMan.Api.Data;
 
 namespace MiniMan.Api.Endpoints;
 
@@ -9,8 +11,6 @@ namespace MiniMan.Api.Endpoints;
 /// </summary>
 public static class MaintenanceNotificationEndpoints
 {
-    private static readonly Dictionary<Guid, MaintenanceNotification> _notifications = new();
-
     public static void MapMaintenanceNotificationEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/maintenance-notifications")
@@ -42,23 +42,26 @@ public static class MaintenanceNotificationEndpoints
             .Produces(StatusCodes.Status404NotFound);
     }
 
-    private static Ok<IEnumerable<MaintenanceNotification>> GetAll()
+    private static async Task<Ok<IEnumerable<MaintenanceNotification>>> GetAll(MiniManDbContext dbContext)
     {
-        return TypedResults.Ok(_notifications.Values.AsEnumerable());
+        var notifications = await dbContext.MaintenanceNotifications.ToListAsync();
+        return TypedResults.Ok(notifications.AsEnumerable());
     }
 
-    private static Results<Ok<MaintenanceNotification>, NotFound> GetById(Guid id)
+    private static async Task<Results<Ok<MaintenanceNotification>, NotFound>> GetById(Guid id, MiniManDbContext dbContext)
     {
-        if (_notifications.TryGetValue(id, out var notification))
+        var notification = await dbContext.MaintenanceNotifications.FindAsync(id);
+        if (notification == null)
         {
-            return TypedResults.Ok(notification);
+            return TypedResults.NotFound();
         }
-        return TypedResults.NotFound();
+        return TypedResults.Ok(notification);
     }
 
     private static async Task<Results<Created<MaintenanceNotification>, BadRequest<string>>> Create(
         MaintenanceNotification notification,
-        IValidator<MaintenanceNotification> validator)
+        IValidator<MaintenanceNotification> validator,
+        MiniManDbContext dbContext)
     {
         var validationResult = await validator.ValidateAsync(notification);
         if (!validationResult.IsValid)
@@ -68,7 +71,9 @@ public static class MaintenanceNotificationEndpoints
 
         notification.Id = Guid.NewGuid();
         notification.CreatedDate = DateTime.UtcNow;
-        _notifications[notification.Id] = notification;
+        
+        dbContext.MaintenanceNotifications.Add(notification);
+        await dbContext.SaveChangesAsync();
 
         return TypedResults.Created($"/api/maintenance-notifications/{notification.Id}", notification);
     }
@@ -76,9 +81,11 @@ public static class MaintenanceNotificationEndpoints
     private static async Task<Results<Ok<MaintenanceNotification>, BadRequest<string>, NotFound>> Update(
         Guid id,
         MaintenanceNotification notification,
-        IValidator<MaintenanceNotification> validator)
+        IValidator<MaintenanceNotification> validator,
+        MiniManDbContext dbContext)
     {
-        if (!_notifications.ContainsKey(id))
+        var existing = await dbContext.MaintenanceNotifications.FindAsync(id);
+        if (existing == null)
         {
             return TypedResults.NotFound();
         }
@@ -89,18 +96,28 @@ public static class MaintenanceNotificationEndpoints
             return TypedResults.BadRequest(string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage)));
         }
 
-        notification.Id = id;
-        _notifications[id] = notification;
+        existing.Title = notification.Title;
+        existing.Description = notification.Description;
+        existing.ScheduledDate = notification.ScheduledDate;
+        existing.Status = notification.Status;
+        existing.Priority = notification.Priority;
 
-        return TypedResults.Ok(notification);
+        await dbContext.SaveChangesAsync();
+
+        return TypedResults.Ok(existing);
     }
 
-    private static Results<NoContent, NotFound> Delete(Guid id)
+    private static async Task<Results<NoContent, NotFound>> Delete(Guid id, MiniManDbContext dbContext)
     {
-        if (!_notifications.Remove(id))
+        var notification = await dbContext.MaintenanceNotifications.FindAsync(id);
+        if (notification == null)
         {
             return TypedResults.NotFound();
         }
+
+        dbContext.MaintenanceNotifications.Remove(notification);
+        await dbContext.SaveChangesAsync();
+
         return TypedResults.NoContent();
     }
 }

@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
-using Microsoft.AspNetCore.Mvc.Testing;
 using MiniMan.Models;
 using MiniMan.Models.Enums;
 
@@ -10,12 +9,15 @@ namespace MiniMan.Api.Tests;
 /// <summary>
 /// Integration tests for AccessPermissionRequest endpoints
 /// </summary>
-public class AccessPermissionRequestEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+[Collection("Sequential")]
+public class AccessPermissionRequestEndpointsTests : IClassFixture<CustomWebApplicationFactory>
 {
     private readonly HttpClient _client;
+    private readonly CustomWebApplicationFactory _factory;
 
-    public AccessPermissionRequestEndpointsTests(WebApplicationFactory<Program> factory)
+    public AccessPermissionRequestEndpointsTests(CustomWebApplicationFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
     }
 

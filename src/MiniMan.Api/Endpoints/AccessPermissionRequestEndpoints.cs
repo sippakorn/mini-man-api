@@ -1,6 +1,8 @@
 using FluentValidation;
 using MiniMan.Models;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
+using MiniMan.Api.Data;
 
 namespace MiniMan.Api.Endpoints;
 
@@ -9,8 +11,6 @@ namespace MiniMan.Api.Endpoints;
 /// </summary>
 public static class AccessPermissionRequestEndpoints
 {
-    private static readonly Dictionary<Guid, AccessPermissionRequest> _requests = new();
-
     public static void MapAccessPermissionRequestEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/access-permission-requests")
@@ -42,23 +42,26 @@ public static class AccessPermissionRequestEndpoints
             .Produces(StatusCodes.Status404NotFound);
     }
 
-    private static Ok<IEnumerable<AccessPermissionRequest>> GetAll()
+    private static async Task<Ok<IEnumerable<AccessPermissionRequest>>> GetAll(MiniManDbContext dbContext)
     {
-        return TypedResults.Ok(_requests.Values.AsEnumerable());
+        var requests = await dbContext.AccessPermissionRequests.ToListAsync();
+        return TypedResults.Ok(requests.AsEnumerable());
     }
 
-    private static Results<Ok<AccessPermissionRequest>, NotFound> GetById(Guid id)
+    private static async Task<Results<Ok<AccessPermissionRequest>, NotFound>> GetById(Guid id, MiniManDbContext dbContext)
     {
-        if (_requests.TryGetValue(id, out var request))
+        var request = await dbContext.AccessPermissionRequests.FindAsync(id);
+        if (request == null)
         {
-            return TypedResults.Ok(request);
+            return TypedResults.NotFound();
         }
-        return TypedResults.NotFound();
+        return TypedResults.Ok(request);
     }
 
     private static async Task<Results<Created<AccessPermissionRequest>, BadRequest<string>>> Create(
         AccessPermissionRequest request,
-        IValidator<AccessPermissionRequest> validator)
+        IValidator<AccessPermissionRequest> validator,
+        MiniManDbContext dbContext)
     {
         var validationResult = await validator.ValidateAsync(request);
         if (!validationResult.IsValid)
@@ -68,7 +71,9 @@ public static class AccessPermissionRequestEndpoints
 
         request.Id = Guid.NewGuid();
         request.RequestDate = DateTime.UtcNow;
-        _requests[request.Id] = request;
+        
+        dbContext.AccessPermissionRequests.Add(request);
+        await dbContext.SaveChangesAsync();
 
         return TypedResults.Created($"/api/access-permission-requests/{request.Id}", request);
     }
@@ -76,9 +81,11 @@ public static class AccessPermissionRequestEndpoints
     private static async Task<Results<Ok<AccessPermissionRequest>, BadRequest<string>, NotFound>> Update(
         Guid id,
         AccessPermissionRequest request,
-        IValidator<AccessPermissionRequest> validator)
+        IValidator<AccessPermissionRequest> validator,
+        MiniManDbContext dbContext)
     {
-        if (!_requests.ContainsKey(id))
+        var existing = await dbContext.AccessPermissionRequests.FindAsync(id);
+        if (existing == null)
         {
             return TypedResults.NotFound();
         }
@@ -89,18 +96,29 @@ public static class AccessPermissionRequestEndpoints
             return TypedResults.BadRequest(string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage)));
         }
 
-        request.Id = id;
-        _requests[id] = request;
+        existing.RequestedBy = request.RequestedBy;
+        existing.ResourceName = request.ResourceName;
+        existing.PermissionType = request.PermissionType;
+        existing.ApprovedDate = request.ApprovedDate;
+        existing.Status = request.Status;
+        existing.Reason = request.Reason;
 
-        return TypedResults.Ok(request);
+        await dbContext.SaveChangesAsync();
+
+        return TypedResults.Ok(existing);
     }
 
-    private static Results<NoContent, NotFound> Delete(Guid id)
+    private static async Task<Results<NoContent, NotFound>> Delete(Guid id, MiniManDbContext dbContext)
     {
-        if (!_requests.Remove(id))
+        var request = await dbContext.AccessPermissionRequests.FindAsync(id);
+        if (request == null)
         {
             return TypedResults.NotFound();
         }
+
+        dbContext.AccessPermissionRequests.Remove(request);
+        await dbContext.SaveChangesAsync();
+
         return TypedResults.NoContent();
     }
 }
