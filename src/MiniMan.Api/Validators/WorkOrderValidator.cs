@@ -19,7 +19,7 @@ public class WorkOrderValidator : AbstractValidator<WorkOrder>
             .MaximumLength(2000).WithMessage("Description must not exceed 2000 characters");
 
         RuleFor(x => x.DueDate)
-            .GreaterThan(x => x.CreatedDate).WithMessage("Due date must be after created date");
+            .Must(date => date > DateTime.UtcNow).WithMessage("Due date must be in the future");
 
         RuleFor(x => x.AssignedTo)
             .NotEmpty().WithMessage("Assigned to is required")

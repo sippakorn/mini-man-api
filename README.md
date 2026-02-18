@@ -1,6 +1,6 @@
 # MiniMan API
 
-A .NET 10 Minimal API solution for managing maintenance notifications, work orders, and access permission requests.
+A .NET 10 Minimal API solution for managing maintenance notifications, work orders, and access permission requests with **SQL Server temporal tables** for complete history tracking.
 
 ## Project Structure
 
@@ -19,6 +19,10 @@ MiniMan.sln
 │   │       └── PermissionStatus.cs
 │   └── MiniMan.Api/              # Minimal API project
 │       ├── Program.cs
+│       ├── Data/
+│       │   └── MiniManDbContext.cs
+│       ├── Migrations/
+│       │   └── (EF Core migrations)
 │       ├── Validators/
 │       │   ├── MaintenanceNotificationValidator.cs
 │       │   ├── WorkOrderValidator.cs
@@ -31,12 +35,70 @@ MiniMan.sln
     └── MiniMan.Api.Tests/        # xUnit test project
         ├── MaintenanceNotificationEndpointsTests.cs
         ├── WorkOrderEndpointsTests.cs
-        └── AccessPermissionRequestEndpointsTests.cs
+        ├── AccessPermissionRequestEndpointsTests.cs
+        └── CustomWebApplicationFactory.cs
 ```
 
 ## Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [SQL Server](https://www.microsoft.com/en-us/sql-server/sql-server-downloads) (LocalDB, Express, or full version)
+  - For development, SQL Server LocalDB is recommended (included with Visual Studio)
+  - For production, use SQL Server Express or higher
+
+## Database Setup
+
+This application uses **SQL Server with Temporal Tables** for all entities, providing automatic history tracking of all changes.
+
+### Configure Connection String
+
+Update the connection string in `src/MiniMan.Api/appsettings.json`:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=MiniManDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True"
+  }
+}
+```
+
+For other SQL Server instances:
+```json
+"DefaultConnection": "Server=YOUR_SERVER;Database=MiniManDb;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True"
+```
+
+### Apply Migrations
+
+The database will be created automatically when you first run the application. Alternatively, you can manually apply migrations:
+
+```bash
+cd src/MiniMan.Api
+dotnet ef database update
+```
+
+### Temporal Tables
+
+All three entities (MaintenanceNotifications, WorkOrders, AccessPermissionRequests) are configured as temporal tables with:
+- **Current tables**: Store the current state of data
+- **History tables**: Automatically track all historical changes
+- **Period columns**: `PeriodStart` and `PeriodEnd` track the validity period of each row
+
+**Query temporal data:**
+```sql
+-- Get current data
+SELECT * FROM MaintenanceNotifications
+
+-- Get all historical data
+SELECT * FROM MaintenanceNotificationsHistory
+
+-- Get data as of specific point in time
+SELECT * FROM MaintenanceNotifications
+FOR SYSTEM_TIME AS OF '2026-02-15 12:00:00'
+
+-- Get all changes between two dates
+SELECT * FROM MaintenanceNotifications
+FOR SYSTEM_TIME BETWEEN '2026-02-01' AND '2026-02-28'
+```
 
 ## Getting Started
 
@@ -180,11 +242,13 @@ The API uses FluentValidation to enforce the following rules:
 
 - ✅ .NET 10 Minimal API
 - ✅ Three entity types with full CRUD operations
+- ✅ **SQL Server with Temporal Tables** for complete history tracking
+- ✅ Entity Framework Core 10 with migrations
 - ✅ FluentValidation for request validation
-- ✅ In-memory data storage
 - ✅ OpenAPI/Swagger documentation
 - ✅ Proper HTTP status codes (200, 201, 204, 400, 404)
 - ✅ Comprehensive unit and integration tests
+- ✅ In-memory database for testing
 - ✅ XML documentation comments
 - ✅ Clean architecture with separation of concerns
 
@@ -192,20 +256,45 @@ The API uses FluentValidation to enforce the following rules:
 
 - **Framework**: .NET 10
 - **API Style**: Minimal API
+- **Database**: SQL Server with Temporal Tables
+- **ORM**: Entity Framework Core 10
 - **Validation**: FluentValidation 11.11.0
-- **Testing**: xUnit with FluentAssertions
+- **Testing**: xUnit with FluentAssertions, In-Memory Database
 - **Documentation**: OpenAPI/Swagger
 
 ## Development
 
+### Database Migrations
+
+When you make changes to your models, create a new migration:
+
+```bash
+cd src/MiniMan.Api
+dotnet ef migrations add YourMigrationName
+dotnet ef database update
+```
+
+To remove the last migration (if not applied):
+```bash
+dotnet ef migrations remove
+```
+
+To see migration history:
+```bash
+dotnet ef migrations list
+```
+
 ### Adding a New Endpoint
 
 1. Add your model to `src/MiniMan.Models/`
-2. Create a validator in `src/MiniMan.Api/Validators/`
-3. Create endpoint methods in `src/MiniMan.Api/Endpoints/`
-4. Register the validator in `Program.cs`
-5. Map the endpoints in `Program.cs`
-6. Add tests in `tests/MiniMan.Api.Tests/`
+2. Update `MiniManDbContext` in `src/MiniMan.Api/Data/` to include the new DbSet
+3. Configure the entity with temporal table in `OnModelCreating`
+4. Create a migration: `dotnet ef migrations add AddYourEntity`
+5. Create a validator in `src/MiniMan.Api/Validators/`
+6. Create endpoint methods in `src/MiniMan.Api/Endpoints/`
+7. Register the validator in `Program.cs`
+8. Map the endpoints in `Program.cs`
+9. Add tests in `tests/MiniMan.Api.Tests/`
 
 ### Running in Development Mode
 
@@ -214,7 +303,7 @@ cd src/MiniMan.Api
 dotnet watch run
 ```
 
-This will start the API with hot reload enabled.
+This will start the API with hot reload enabled and automatically apply pending migrations.
 
 ## Testing
 
@@ -224,6 +313,8 @@ The solution includes 30 integration tests covering:
 - Validation scenarios
 - Error handling (404, 400)
 - Edge cases
+
+**Note**: Tests use an in-memory database provider, so temporal table features are not tested. The in-memory provider is automatically configured when running tests.
 
 To run specific tests:
 
