@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MiniMan.Api/MiniMan.Api.csproj" />
+    <Project Path="src/MiniMan.Models/MiniMan.Models.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MiniMan.Api.Tests/MiniMan.Api.Tests.csproj" />
+  </Folder>
+</Solution>
