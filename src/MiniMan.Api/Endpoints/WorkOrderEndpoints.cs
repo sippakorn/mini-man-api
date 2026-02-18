@@ -58,7 +58,7 @@ public static class WorkOrderEndpoints
         return TypedResults.Ok(workOrder);
     }
 
-    private static async Task<Results<Created<WorkOrder>, BadRequest<string>>> Create(
+    private static async Task<Results<Created<WorkOrder>, ValidationProblem>> Create(
         WorkOrder workOrder,
         IValidator<WorkOrder> validator,
         MiniManDbContext dbContext)
@@ -66,7 +66,13 @@ public static class WorkOrderEndpoints
         var validationResult = await validator.ValidateAsync(workOrder);
         if (!validationResult.IsValid)
         {
-            return TypedResults.BadRequest(string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage)));
+            var errors = validationResult.Errors
+                .GroupBy(e => e.PropertyName)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(e => e.ErrorMessage).ToArray()
+                );
+            return TypedResults.ValidationProblem(errors);
         }
 
         workOrder.Id = Guid.NewGuid();
@@ -78,7 +84,7 @@ public static class WorkOrderEndpoints
         return TypedResults.Created($"/api/work-orders/{workOrder.Id}", workOrder);
     }
 
-    private static async Task<Results<Ok<WorkOrder>, BadRequest<string>, NotFound>> Update(
+    private static async Task<Results<Ok<WorkOrder>, ValidationProblem, NotFound>> Update(
         Guid id,
         WorkOrder workOrder,
         IValidator<WorkOrder> validator,
@@ -93,7 +99,13 @@ public static class WorkOrderEndpoints
         var validationResult = await validator.ValidateAsync(workOrder);
         if (!validationResult.IsValid)
         {
-            return TypedResults.BadRequest(string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage)));
+            var errors = validationResult.Errors
+                .GroupBy(e => e.PropertyName)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(e => e.ErrorMessage).ToArray()
+                );
+            return TypedResults.ValidationProblem(errors);
         }
 
         existing.OrderNumber = workOrder.OrderNumber;

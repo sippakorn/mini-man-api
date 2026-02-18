@@ -58,7 +58,7 @@ public static class AccessPermissionRequestEndpoints
         return TypedResults.Ok(request);
     }
 
-    private static async Task<Results<Created<AccessPermissionRequest>, BadRequest<string>>> Create(
+    private static async Task<Results<Created<AccessPermissionRequest>, ValidationProblem>> Create(
         AccessPermissionRequest request,
         IValidator<AccessPermissionRequest> validator,
         MiniManDbContext dbContext)
@@ -66,7 +66,13 @@ public static class AccessPermissionRequestEndpoints
         var validationResult = await validator.ValidateAsync(request);
         if (!validationResult.IsValid)
         {
-            return TypedResults.BadRequest(string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage)));
+            var errors = validationResult.Errors
+                .GroupBy(e => e.PropertyName)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(e => e.ErrorMessage).ToArray()
+                );
+            return TypedResults.ValidationProblem(errors);
         }
 
         request.Id = Guid.NewGuid();
@@ -78,7 +84,7 @@ public static class AccessPermissionRequestEndpoints
         return TypedResults.Created($"/api/access-permission-requests/{request.Id}", request);
     }
 
-    private static async Task<Results<Ok<AccessPermissionRequest>, BadRequest<string>, NotFound>> Update(
+    private static async Task<Results<Ok<AccessPermissionRequest>, ValidationProblem, NotFound>> Update(
         Guid id,
         AccessPermissionRequest request,
         IValidator<AccessPermissionRequest> validator,
@@ -93,7 +99,13 @@ public static class AccessPermissionRequestEndpoints
         var validationResult = await validator.ValidateAsync(request);
         if (!validationResult.IsValid)
         {
-            return TypedResults.BadRequest(string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage)));
+            var errors = validationResult.Errors
+                .GroupBy(e => e.PropertyName)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(e => e.ErrorMessage).ToArray()
+                );
+            return TypedResults.ValidationProblem(errors);
         }
 
         existing.RequestedBy = request.RequestedBy;
